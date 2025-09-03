@@ -150,26 +150,26 @@ function xray_install() {
   judge "Xray 安装"
 }
 
-# 生成随机端口并检查
-function generate_random_port() {
+# 生成随机端口、UUID、privateKey、publicKey、shortIds
+function generate_random_port_generate_uuid_privateKey_publicKey_shortIds() {
     local min_port=30000
     local max_port=60000
     local port_range=$((max_port - min_port + 1))
     
     # 生成随机端口
     domain_port=$((RANDOM % port_range + min_port))
-    
-    # 确保端口未被占用
-    while nc -z 127.0.0.1 $domain_port >/dev/null 2>&1; do
-        domain_port=$((RANDOM % port_range + min_port))
-    done
+
+    domain_uuid=$(xray uuid)
+    xray x25519 > /tmp/keys.txt
+    domain_privateKey=$(grep "PrivateKey" /tmp/keys.txt | awk '{print $2}')
+    domain_publicKey=$(grep "Password" /tmp/keys.txt | awk '{print $2}')
+    domain_shortIds=$(openssl rand -hex 8)
 }
 
 # 下载配置文件
 function configure_xray() {
-  # cd /usr/local/etc/xray && rm -f config.json && wget -O config.json https://raw.githubusercontent.com/wulabing/Xray_onekey/${github_branch}/config/xray_xtls-rprx-vision.json
-  modify_port
-  cat /usr/local/etc/xray/config.json
+  cd /usr/local/etc/xray && rm -f config.json && wget -O config.json https://raw.githubusercontent.com/2253845067/Xray_install/${github_branch}/config.json
+  modify_port_modify_uuid_privateKey_publicKey_shortIds
 }
 
 # 更改配置文件
@@ -181,11 +181,84 @@ function xray_tmp_config_file_check_and_use() {
   fi
 }
 
-# 修改端口号
-function modify_port() {
-  cat ${xray_conf_dir}/config.json | jq 'setpath(["inbounds",0,"port"];'${domain_port}') | setpath(["inbounds",0,"settings","port"]; '${domain_port}') | setpath(["inbounds",1,"port"]; '${domain_port}')' >${xray_conf_dir}/config_tmp.json
+# 修改端口、UUID、privateKey、publicKey、shortIds
+function modify_port_modify_uuid_privateKey_publicKey_shortIds() {
+  jq --arg port "$domain_port" \
+     --arg uuid "$domain_uuid" \
+     --arg privateKey "$domain_privateKey" \
+     --arg publicKey "$domain_publicKey" \
+     --arg shortIds "$domain_shortIds" '
+  setpath(["inbounds",0,"port"]; $port | tonumber) |
+  setpath(["inbounds",0,"settings","port"]; $port | tonumber) |
+  setpath(["inbounds",1,"port"]; $port | tonumber) |
+  setpath(["inbounds",1,"settings","clients",0,"id"]; $uuid) |
+  setpath(["inbounds",1,"streamSettings","realitySettings","privateKey"]; $privateKey) |
+  setpath(["inbounds",1,"streamSettings","realitySettings","publicKey"]; $publicKey) |
+  setpath(["inbounds",1,"streamSettings","realitySettings","shortIds"]; ["", $shortIds])
+  ' ${xray_conf_dir}/config.json > ${xray_conf_dir}/config_tmp.json
   xray_tmp_config_file_check_and_use
-  judge "Xray 端口 修改"
+  judge "Xray 端口、UUID、privateKey、publicKey、shortIds 修改"
+}
+
+# 重启xray
+function restart_all() {
+  systemctl restart xray
+  systemctl enable xray
+  judge "Xray 启动"
+}
+
+# 基本信息
+function basic_information() {
+  print_ok "VLESS-TCP-XTLS-Vision-REALITY (without being stolen) 安装成功"
+  vless_tcp_xtls-vision_reality_information
+  vless_tcp_xtls-vision_reality_link
+}
+
+# 信息
+function vless_tcp_xtls-vision_reality_information() {
+  # 获取本机IPv4和IPv6地址
+  local_ipv4=$(curl -4s ip.sb 2>/dev/null || curl -4s icanhazip.com 2>/dev/null || print_error "无法获取IPv4地址")
+  local_ipv6=$(curl -6s ip.sb 2>/dev/null || curl -6s icanhazip.com 2>/dev/null || print_error "无法获取IPv6地址")
+    
+  # 存储IP地址
+  if [[ "${local_ipv4}" != "无法获取IPv4地址" ]]; then
+    domain_ip="${local_ipv4}"
+  elif [[ "${local_ipv6}" != "无法获取IPv6地址" ]]; then
+    domain_ip="${local_ipv6}"
+  else
+    print_error "无法获取有效的 IP 地址"
+    exit 1
+  fi
+
+  domain_port=$(cat ${xray_conf_dir}/config.json | jq .inbounds[0].port)
+  domain_uuid=$(cat ${xray_conf_dir}/config.json | jq -r '.inbounds[1].settings.clients[0].id')
+  domain_flow=$(cat ${xray_conf_dir}/config.json | jq -r '.inbounds[1].settings.clients[0].flow')
+  domain_sni=$(cat ${xray_conf_dir}/config.json | jq -r '.inbounds[1].streamSettings.realitySettings.serverNames[0]')
+  domain_publicKey=$(cat ${xray_conf_dir}/config.json | jq -r '.inbounds[1].streamSettings.realitySettings.publicKey')
+  domain_shortIds=$(cat ${xray_conf_dir}/config.json | jq -r '.inbounds[1].streamSettings.realitySettings.shortIds[1]')
+
+  echo -e "${Red} Xray 配置信息 ${Font}"
+  echo -e "${Red} 地址（address）:${Font}  $domain_ip"
+  echo -e "${Red} 端口（port）：${Font}  $domain_port"
+  echo -e "${Red} 用户 ID（UUID）：${Font} $domain_uuid"
+  echo -e "${Red} 流控（flow）：${Font} $domain_flow"
+  echo -e "${Red} 加密方式（security）：${Font} none "
+  echo -e "${Red} 传输协议（network）：${Font} tcp "
+  echo -e "${Red} 伪装类型（type）：${Font} none "
+  echo -e "${Red} 底层传输安全：${Font} reality"
+  echo -e "${Red} SNI：${Font} $domain_sni"
+  echo -e "${Red} Fingerprint：${Font} chrome"
+  echo -e "${Red} PublicKey：${Font} $domain_publicKey"
+  echo -e "${Red} ShortIds：${Font} $domain_shortIds"
+}
+
+# 信息
+function vless_tcp_xtls-vision_reality_link() {
+  print_ok "URL 链接"
+  print_ok "vless://$domain_uuid@$domain_ip:$domain_port?encryption=none&flow=$domain_flow&security=reality&sni=$domain_sni&fp=chrome&pbk=$domain_publicKey&sid=$domain_shortIds&spx=%2F&type=tcp&headerType=none#dokodemo-in"
+  print_ok "-------------------------------------------------"
+  print_ok "URL 二维码 (VLESS + TCP + TLS) （请在浏览器中访问）"
+  print_ok "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=vless://$domain_uuid@$domain_ip:$domain_port?encryption=none&flow=$domain_flow&security=reality&sni=$domain_sni&fp=chrome&pbk=$domain_publicKey&sid=$domain_shortIds&spx=%2F&type=tcp&headerType=none#dokodemo-in"
 }
 
 # 安装进度提示
@@ -200,21 +273,16 @@ judge() {
 }
 
 function install_xray() {
-  # is_root
-  # system_check
-  # dependency_install
-  # basic_optimization
-  # domain_check
-  # xray_install
-  generate_random_port
+  is_root
+  system_check
+  dependency_install
+  basic_optimization
+  domain_check
+  xray_install
+  generate_random_port_generate_uuid_privateKey_publicKey_shortIds
   configure_xray
-  # nginx_install
-  # configure_nginx
-  # configure_web
-  # generate_certificate
-  # ssl_judge_and_install
-  # restart_all
-  # basic_information
+  restart_all
+  basic_information
 }
 menu() {
   # update_sh
@@ -225,18 +293,18 @@ menu() {
   echo -e "—————————————— 安装向导 ——————————————"""
   # echo -e "${Green}0.${Font}  升级 脚本"
   echo -e "${Green}1.${Font}  安装 Xray (VLESS-TCP-XTLS-Vision-REALITY (without being stolen))"
-  # echo -e "—————————————— 配置变更 ——————————————"
+  echo -e "—————————————— 配置变更 ——————————————"
   # echo -e "${Green}11.${Font} 变更 UUID"
   # echo -e "${Green}13.${Font} 变更 连接端口"
-  # echo -e "—————————————— 查看信息 ——————————————"
-  # echo -e "${Green}21.${Font} 查看 实时访问日志"
-  # echo -e "${Green}22.${Font} 查看 实时错误日志"
+  echo -e "—————————————— 查看信息 ——————————————"
+  echo -e "${Green}21.${Font} 查看 实时访问日志"
+  echo -e "${Green}22.${Font} 查看 实时错误日志"
   # echo -e "${Green}23.${Font} 查看 Xray 配置链接"
   # echo -e "${Green}23.${Font}  查看 V2Ray 配置信息"
   # echo -e "—————————————— 其他选项 ——————————————"
-  # echo -e "${Green}33.${Font} 卸载 Xray"
-  # echo -e "${Green}34.${Font} 更新 Xray-core"
-  # echo -e "${Green}35.${Font} 安装 Xray-core 测试版 (Pre)"
+  echo -e "${Green}33.${Font} 卸载 Xray"
+  echo -e "${Green}34.${Font} 更新 Xray-core"
+  echo -e "${Green}35.${Font} 安装 Xray-core 测试版 (Pre)"
   echo -e "${Green}40.${Font} 退出"
   read -rp "请输入数字：" menu_num
   case $menu_num in
@@ -301,11 +369,11 @@ menu() {
     xray_uninstall
     ;;
   34)
-    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" - install
+    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
     restart_all
     ;;
   35)
-    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" - install --beta
+    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --beta
     restart_all
     ;;
   36)

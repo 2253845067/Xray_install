@@ -37,9 +37,9 @@
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "dest": "speed.cloudflare.com:443",
+                    "dest": "yahoo.com:443",
                     "serverNames": [
-                        "speed.cloudflare.com"
+                        "yahoo.com"
                     ],
                     "privateKey": "",
                     "publicKey": "",
@@ -77,7 +77,7 @@
                     "dokodemo-in"
                 ],
                 "domain": [
-                    "speed.cloudflare.com"
+                    "yahoo.com"
                 ],
                 "outboundTag": "direct"
             },
