@@ -17,10 +17,6 @@ wget -N --no-check-certificate -q -O install.sh "https://raw.githubusercontent.c
 
 停止 Xray：`systemctl stop xray`
 
-启动 Nginx：`systemctl start nginx`
-
-停止 Nginx：`systemctl stop nginx`
-
 ### 相关目录
 
 Xray 服务端配置：`/usr/local/etc/xray/config.json`
