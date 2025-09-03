@@ -108,9 +108,9 @@ function dependency_install() {
   judge "安装 curl"
 
   if [[ "${ID}" == "centos" ]]; then
-    ${INS} pcre pcre-devel zlib-devel epel-release openssl openssl-devel
+    ${INS} pcre pcre-devel zlib-devel epel-release openssl openssl-devel jq
   else
-    ${INS} libpcre3 libpcre3-dev zlib1g-dev openssl libssl-dev
+    ${INS} libpcre3 libpcre3-dev zlib1g-dev openssl libssl-dev jq
   fi
 }
 
