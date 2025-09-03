@@ -37,8 +37,11 @@ set -o pipefail # 管道命令错误退出
 # 检查shell模式
 function shell_mode_check() {
   if [ -f ${xray_conf_dir}/config.json ]; then
-    security_type=$(jq -r '.inbounds[1].streamSettings.security // "none"' ${xray_conf_dir}/config.json)
-    network_type=$(jq -r '.inbounds[1].streamSettings.network // "tcp"' ${xray_conf_dir}/config.json)
+    security_type=$(grep -A 20 '"streamSettings"' ${xray_conf_dir}/config.json | grep -A 10 '"security"' | awk -F'"' '{print $4}' | head -1)
+    network_type=$(grep -A 20 '"streamSettings"' ${xray_conf_dir}/config.json | grep -A 10 '"network"' | awk -F'"' '{print $4}' | head -1)
+    
+    security_type=${security_type:-"none"}
+    network_type=${network_type:-"tcp"}
     
     if [ "$security_type" = "reality" ]; then
       shell_mode="reality"
@@ -378,11 +381,7 @@ function install_xray() {
 }
 menu() {
   update_sh
-  if command -v jq &> /dev/null; then
-    shell_mode_check
-  else
-    shell_mode="None"
-  fi
+  shell_mode_check
   echo -e "\t Xray 安装管理脚本 ${Red}[${shell_version}]${Font}"
 
   echo -e "当前已安装版本：${shell_mode}"
