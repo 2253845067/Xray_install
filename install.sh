@@ -34,6 +34,24 @@ set -e          # 遇到错误退出
 set -u          # 遇到未定义变量退出
 set -o pipefail # 管道命令错误退出
 
+# 检查shell模式
+function shell_mode_check() {
+  if [ -f ${xray_conf_dir}/config.json ]; then
+    security_type=$(jq -r '.inbounds[1].streamSettings.security // "none"' ${xray_conf_dir}/config.json)
+    network_type=$(jq -r '.inbounds[1].streamSettings.network // "tcp"' ${xray_conf_dir}/config.json)
+    
+    if [ "$security_type" = "reality" ]; then
+      shell_mode="reality"
+    elif [ "$network_type" = "ws" ] || [ "$network_type" = "websocket" ]; then
+      shell_mode="ws"
+    else
+      shell_mode="tcp"
+    fi
+  else
+    shell_mode="None"
+  fi
+}
+
 # 打印信息
 function print_ok() {
   echo -e "${OK} ${Blue} $1 ${Font}"
@@ -94,9 +112,6 @@ function dependency_install() {
   else
     ${INS} libpcre3 libpcre3-dev zlib1g-dev openssl libssl-dev
   fi
-
-  # 防止部分系统xray的默认bin目录缺失
-  mkdir /usr/local/bin >/dev/null 2>&1
 }
 
 # 基础优化
@@ -268,6 +283,76 @@ function xray_uninstall() {
   exit 0
 }
 
+# 变更UUID
+function modify_UUID() {
+  read -rp "请输入 UUID (直接回车将自动生成): " UUID
+  if [ -z "$UUID" ]; then
+    # 自动生成 UUID
+    if command -v xray &> /dev/null; then
+        UUID=$(xray uuid)
+    else
+        UUID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen 2>/dev/null || openssl rand -hex 16 | sed 's/\(........\)\(....\)\(....\)\(............\)/\1-\2-\3-\4/')
+    fi
+    echo "已自动生成 UUID: $UUID"
+  fi
+
+  # 验证 UUID 格式（基本验证）
+  if [[ ! "$UUID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+    echo "错误: UUID 格式不正确"
+    exit 1
+  fi
+
+  # 使用 jq 的安全方式修改配置
+  jq --arg uuid "$UUID" 'setpath(["inbounds",1,"settings","clients",0,"id"]; $uuid)' ${xray_conf_dir}/config.json > ${xray_conf_dir}/config_tmp.json
+
+  # 检查并应用配置
+  xray_tmp_config_file_check_and_use
+  judge "Xray TCP UUID 修改"
+  restart_all
+}
+
+# 变更端口
+function modify_port() {
+  read -rp "请输入端口 (直接回车将自动生成): " port
+  if [ -z "$port" ]; then
+    local min_port=30000
+    local max_port=60000
+    local port_range=$((max_port - min_port + 1))
+    
+    # 生成随机端口
+    port=$((RANDOM % port_range + min_port))
+  fi
+
+  echo "已自动生成 端口: $port"
+
+  jq --arg port "$port" 'setpath(["inbounds",0,"port"]; $port | tonumber) | setpath(["inbounds",0,"settings","port"]; $port | tonumber) | setpath(["inbounds",1,"port"]; $port | tonumber)' ${xray_conf_dir}/config.json > ${xray_conf_dir}/config_tmp.json
+
+  xray_tmp_config_file_check_and_use
+  judge "Xray 端口修改"
+  restart_all
+}
+
+# 更新脚本
+function update_sh() {
+  ol_version=$(curl -L -s https://raw.githubusercontent.com/2253845067/Xray_install/${github_branch}/install.sh | grep "shell_version=" | head -1 | awk -F '=|"' '{print $3}')
+  if [[ "$shell_version" != "$(echo -e "$shell_version\n$ol_version" | sort -rV | head -1)" ]]; then
+    print_ok "存在新版本，是否更新 [Y/N]?"
+    read -r update_confirm
+    case $update_confirm in
+    [yY][eE][sS] | [yY])
+      wget -N --no-check-certificate https://raw.githubusercontent.com/2253845067/Xray_install/${github_branch}/install.sh
+      print_ok "更新完成"
+      print_ok "您可以通过 bash $0 执行本程序"
+      exit 0
+      ;;
+    *) ;;
+    esac
+  else
+    print_ok "当前版本为最新版本"
+    print_ok "您可以通过 bash $0 执行本程序"
+  fi
+}
+
 # 安装进度提示
 judge() {
   if [[ 0 -eq $? ]]; then
@@ -292,26 +377,25 @@ function install_xray() {
   basic_information
 }
 menu() {
-  # update_sh
-  # shell_mode_check
+  update_sh
+  shell_mode_check
   echo -e "\t Xray 安装管理脚本 ${Red}[${shell_version}]${Font}"
 
-  # echo -e "当前已安装版本：${shell_mode}"
+  echo -e "当前已安装版本：${shell_mode}"
   echo -e "—————————————— 安装向导 ——————————————"""
-  # echo -e "${Green}0.${Font}  升级 脚本"
+  echo -e "${Green}0.${Font}  升级 脚本"
   echo -e "${Green}1.${Font}  安装 Xray (VLESS-TCP-XTLS-Vision-REALITY (without being stolen))"
   echo -e "—————————————— 配置变更 ——————————————"
-  # echo -e "${Green}11.${Font} 变更 UUID"
-  # echo -e "${Green}13.${Font} 变更 连接端口"
+  echo -e "${Green}11.${Font} 变更 UUID"
+  echo -e "${Green}12.${Font} 变更 连接端口"
   echo -e "—————————————— 查看信息 ——————————————"
   echo -e "${Green}21.${Font} 查看 实时访问日志"
   echo -e "${Green}22.${Font} 查看 实时错误日志"
-  # echo -e "${Green}23.${Font} 查看 Xray 配置链接"
-  # echo -e "${Green}23.${Font}  查看 V2Ray 配置信息"
-  # echo -e "—————————————— 其他选项 ——————————————"
-  echo -e "${Green}33.${Font} 卸载 Xray"
-  echo -e "${Green}34.${Font} 更新 Xray-core"
-  echo -e "${Green}35.${Font} 安装 Xray-core 测试版 (Pre)"
+  echo -e "${Green}23.${Font} 查看 Xray 配置链接"
+  echo -e "—————————————— 其他选项 ——————————————"
+  echo -e "${Green}31.${Font} 卸载 Xray"
+  echo -e "${Green}32.${Font} 更新 Xray-core"
+  echo -e "${Green}33.${Font} 安装 Xray-core 测试版 (Pre)"
   echo -e "${Green}40.${Font} 退出"
   read -rp "请输入数字：" menu_num
   case $menu_num in
@@ -321,32 +405,13 @@ menu() {
   1)
     install_xray
     ;;
-  2)
-    install_xray_ws
-    ;;
   11)
-    read -rp "请输入 UUID:" UUID
-    if [[ ${shell_mode} == "tcp" ]]; then
-      modify_UUID
-    elif [[ ${shell_mode} == "ws" ]]; then
-      modify_UUID
-      modify_UUID_ws
-    fi
-    restart_all
+    modify_UUID
+    basic_information
     ;;
-  13)
+  12)
     modify_port
-    restart_all
-    ;;
-  14)
-    if [[ ${shell_mode} == "ws" ]]; then
-      read -rp "请输入路径(示例：/wulabing/ 要求两侧都包含 /):" WS_PATH
-      modify_fallback_ws
-      modify_ws
-      restart_all
-    else
-      print_error "当前模式不是 Websocket 模式"
-    fi
+    basic_information
     ;;
   21)
     tail -f $xray_access_log
@@ -356,35 +421,21 @@ menu() {
     ;;
   23)
     if [[ -f $xray_conf_dir/config.json ]]; then
-      if [[ ${shell_mode} == "tcp" ]]; then
-        basic_information
-      elif [[ ${shell_mode} == "ws" ]]; then
-        basic_ws_information
-      fi
+      basic_information
     else
       print_error "xray 配置文件不存在"
     fi
     ;;
   31)
-    bbr_boost_sh
-    ;;
-  32)
-    mtproxy_sh
-    ;;
-  33)
     source '/etc/os-release'
     xray_uninstall
     ;;
-  34)
+  32)
     bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
     restart_all
     ;;
-  35)
+  33)
     bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --beta
-    restart_all
-    ;;
-  36)
-    "/root/.acme.sh"/acme.sh --cron --home "/root/.acme.sh"
     restart_all
     ;;
   40)

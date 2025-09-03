@@ -1,13 +1,11 @@
 
 ## Xray 的 VLESS-TCP-XTLS-Vision-REALITY (without being stolen) 一键安装脚本
 
-
 ### 安装/更新方式（Xray 前置）
 
 支持配置方式
 
 - VLESS-TCP-XTLS-Vision-REALITY (without being stolen)
-
 
 ```
 wget -N --no-check-certificate -q -O install.sh "https://raw.githubusercontent.com/2253845067/Xray_install/main/install.sh" && chmod +x install.sh && bash install.sh
@@ -25,6 +23,8 @@ wget -N --no-check-certificate -q -O install.sh "https://raw.githubusercontent.c
 
 ### 相关目录
 
-
 Xray 服务端配置：`/usr/local/etc/xray/config.json`
+
+### 鸣谢
+* 本脚本参考 https://github.com/wulabing/Xray_onekey  修改而来  在此感谢 wulabing。
 
