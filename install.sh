@@ -143,20 +143,49 @@ function domain_check() {
   print_ok "IP地址获取完成"
 }
 
-# 端口检查
-function port_exist_check() {
-  if [[ 0 -eq $(lsof -i:"$1" | grep -i -c "listen") ]]; then
-    print_ok "$1 端口未被占用"
-    sleep 1
+# 安装xray
+function xray_install() {
+  print_ok "安装 Xray"
+  bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+  judge "Xray 安装"
+}
+
+# 生成随机端口并检查
+function generate_random_port() {
+    local min_port=30000
+    local max_port=60000
+    local port_range=$((max_port - min_port + 1))
+    
+    # 生成随机端口
+    domain_port=$((RANDOM % port_range + min_port))
+    
+    # 确保端口未被占用
+    while nc -z 127.0.0.1 $domain_port >/dev/null 2>&1; do
+        domain_port=$((RANDOM % port_range + min_port))
+    done
+}
+
+# 下载配置文件
+function configure_xray() {
+  # cd /usr/local/etc/xray && rm -f config.json && wget -O config.json https://raw.githubusercontent.com/wulabing/Xray_onekey/${github_branch}/config/xray_xtls-rprx-vision.json
+  modify_port
+  cat /usr/local/etc/xray/config.json
+}
+
+# 更改配置文件
+function xray_tmp_config_file_check_and_use() {
+  if [[ -s ${xray_conf_dir}/config_tmp.json ]]; then
+    mv -f ${xray_conf_dir}/config_tmp.json ${xray_conf_dir}/config.json
   else
-    print_error "检测到 $1 端口被占用，以下为 $1 端口占用信息"
-    lsof -i:"$1"
-    print_error "5s 后将尝试自动 kill 占用进程"
-    sleep 5
-    lsof -i:"$1" | awk '{print $2}' | grep -v "PID" | xargs kill -9
-    print_ok "kill 完成"
-    sleep 1
+    print_error "xray 配置文件修改异常"
   fi
+}
+
+# 修改端口号
+function modify_port() {
+  cat ${xray_conf_dir}/config.json | jq 'setpath(["inbounds",0,"port"];'${domain_port}') | setpath(["inbounds",0,"settings","port"]; '${domain_port}') | setpath(["inbounds",1,"port"]; '${domain_port}')' >${xray_conf_dir}/config_tmp.json
+  xray_tmp_config_file_check_and_use
+  judge "Xray 端口 修改"
 }
 
 # 安装进度提示
@@ -176,9 +205,9 @@ function install_xray() {
   # dependency_install
   # basic_optimization
   # domain_check
-  port_exist_check 80
   # xray_install
-  # configure_xray
+  generate_random_port
+  configure_xray
   # nginx_install
   # configure_nginx
   # configure_web
@@ -196,18 +225,18 @@ menu() {
   echo -e "—————————————— 安装向导 ——————————————"""
   # echo -e "${Green}0.${Font}  升级 脚本"
   echo -e "${Green}1.${Font}  安装 Xray (VLESS-TCP-XTLS-Vision-REALITY (without being stolen))"
-  echo -e "—————————————— 配置变更 ——————————————"
-  echo -e "${Green}11.${Font} 变更 UUID"
-  echo -e "${Green}13.${Font} 变更 连接端口"
-  echo -e "—————————————— 查看信息 ——————————————"
-  echo -e "${Green}21.${Font} 查看 实时访问日志"
-  echo -e "${Green}22.${Font} 查看 实时错误日志"
-  echo -e "${Green}23.${Font} 查看 Xray 配置链接"
-  #    echo -e "${Green}23.${Font}  查看 V2Ray 配置信息"
-  echo -e "—————————————— 其他选项 ——————————————"
-  echo -e "${Green}33.${Font} 卸载 Xray"
-  echo -e "${Green}34.${Font} 更新 Xray-core"
-  echo -e "${Green}35.${Font} 安装 Xray-core 测试版 (Pre)"
+  # echo -e "—————————————— 配置变更 ——————————————"
+  # echo -e "${Green}11.${Font} 变更 UUID"
+  # echo -e "${Green}13.${Font} 变更 连接端口"
+  # echo -e "—————————————— 查看信息 ——————————————"
+  # echo -e "${Green}21.${Font} 查看 实时访问日志"
+  # echo -e "${Green}22.${Font} 查看 实时错误日志"
+  # echo -e "${Green}23.${Font} 查看 Xray 配置链接"
+  # echo -e "${Green}23.${Font}  查看 V2Ray 配置信息"
+  # echo -e "—————————————— 其他选项 ——————————————"
+  # echo -e "${Green}33.${Font} 卸载 Xray"
+  # echo -e "${Green}34.${Font} 更新 Xray-core"
+  # echo -e "${Green}35.${Font} 安装 Xray-core 测试版 (Pre)"
   echo -e "${Green}40.${Font} 退出"
   read -rp "请输入数字：" menu_num
   case $menu_num in
