@@ -261,6 +261,13 @@ function vless_tcp_xtls-vision_reality_link() {
   print_ok "https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=vless://$domain_uuid@$domain_ip:$domain_port?encryption=none&flow=$domain_flow&security=reality&sni=$domain_sni&fp=chrome&pbk=$domain_publicKey&sid=$domain_shortIds&spx=%2F&type=tcp&headerType=none#dokodemo-in"
 }
 
+# 卸载xray
+function xray_uninstall() {
+  curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh | bash -s -- remove --purge
+  print_ok "卸载完成"
+  exit 0
+}
+
 # 安装进度提示
 judge() {
   if [[ 0 -eq $? ]]; then
