@@ -378,7 +378,9 @@ function install_xray() {
 }
 menu() {
   update_sh
-  shell_mode_check
+  if command -v jq &> /dev/null; then
+    shell_mode_check
+  fi
   echo -e "\t Xray 安装管理脚本 ${Red}[${shell_version}]${Font}"
 
   echo -e "当前已安装版本：${shell_mode}"
