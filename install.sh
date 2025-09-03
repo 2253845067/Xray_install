@@ -380,6 +380,8 @@ menu() {
   update_sh
   if command -v jq &> /dev/null; then
     shell_mode_check
+  else
+    shell_mode="None"
   fi
   echo -e "\t Xray 安装管理脚本 ${Red}[${shell_version}]${Font}"
 
